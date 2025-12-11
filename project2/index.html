@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>A Rose is a Rose — Letters Become Petals</title>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.3/lib/p5.min.js"></script>
+
+  <!-- 优雅诗歌字体 -->
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500&display=swap" rel="stylesheet">
+
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      background: #fffafc;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    #poem {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      font-family: "Playfair Display", "Georgia", serif;
+      font-size: 22px;
+      line-height: 1.7em;
+      letter-spacing: 0.4px;
+      color: #4a0a18;
+      max-width: 640px;
+      white-space: pre-line;
+      opacity: 0;
+      transition: opacity 3s ease;
+      z-index: 2;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 250, 252, 0);
+      backdrop-filter: blur(0px);
+      transition: all 2s ease;
+      z-index: 1;
+    }
+    #info {
+      position: absolute;
+      bottom: 16px; left: 16px;
+      font-size: 14px;
+      font-family: "Georgia", serif;
+      color: #a11a3c;
+      opacity: 0.7;
+      letter-spacing: 0.5px;
+      z-index: 3;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="overlay"></div>
+  <div id="poem"></div>
+  <div id="info">click to bloom 🌹</div>
+
+  <script>
+  // 🌹 状态与数据
+  let layers = [];
+  const maxLayers = 2;
+  const phrase = "A ROSE IS A ROSE IS A ROSE ";
+  const baseRadius = 8;
+  const growthRate = 0.9;
+
+  let poemDiv, overlayDiv;
+  let poemLines = [
+    "The world repeats what it knows,\ntruth becomes words in rows.\nVoices bloom, then close —\na rose is a rose is a rose.\n",
+    "They nod: so it goes,\na phrase becomes what it shows.\nMeaning fades, but still it glows —\n“a rose is a rose” is a rose.\n",
+    "And I, beneath what language throws,\nsearch for the scent that memory chose.\nNot in speech, but where silence grows —\nwhere a rose is a rose is a rose."
+  ];
+  let currentPoemIndex = 0;
+  let clickCount = 0;
+  let blurActive = false;
+  let transformToPetals = false;
+  let petals = [];
+
+  function setup() {
+    createCanvas(windowWidth, windowHeight);
+    textAlign(CENTER, CENTER);
+    textFont("Georgia");
+    noStroke();
+    poemDiv = document.getElementById("poem");
+    overlayDiv = document.getElementById("overlay");
+  }
+
+  function draw() {
+    background(255, 250, 252, 25);
+    translate(width/2, height/2);
+
+    if (!transformToPetals) {
+      for (const l of layers) {
+        l.angleOffset += 0.002;
+        drawSpiral(l);
+        l.radius += growthRate;
+        l.alpha -= 0.5;
+      }
+      layers = layers.filter(l => l.alpha > 20);
+    } else {
+      for (const p of petals) {
+        p.update();
+        p.display();
+      }
+      petals = petals.filter(p => p.isAlive());
+    }
+  }
+
+  // 🌀 绘制文字螺旋
+  function drawSpiral(layer) {
+    const { radius: startR, angleOffset: offset, size: baseSize, alpha } = layer;
+    fill(180, 0, 70, alpha);
+    let r = startR;
+    const angleStep = PI / 12;
+    const radiusStep = 10;
+    const letterCount = 400;
+
+    for (let i = 0; i < letterCount; i++) {
+      const c = phrase[i % phrase.length];
+      const angle = i * angleStep + offset;
+      const x = r * cos(angle);
+      const y = r * sin(angle);
+      push();
+      translate(x, y);
+      rotate(angle + PI / 2);
+      const ts = baseSize + 0.12 * r;
+      textSize(ts);
+      text(c, 0, 0);
+      pop();
+      r += radiusStep / (1 + 0.01 * i);
+    }
+  }
+
+  // 🖱️ 点击事件逻辑
+  function mousePressed() {
+    clickCount++;
+
+    if (clickCount === 1) {
+      addLayer();
+      return;
+    }
+
+    if (clickCount > 1 && currentPoemIndex < poemLines.length) {
+      addLayer();
+      showPoemWithBlur(poemLines[currentPoemIndex]);
+      currentPoemIndex++;
+      return;
+    }
+
+    if (currentPoemIndex >= poemLines.length && blurActive && !transformToPetals) {
+      hideBlur();
+      return;
+    }
+
+    if (!blurActive && !transformToPetals && currentPoemIndex >= poemLines.length) {
+      lettersToPetalsSnapshot();
+      layers = [];
+      transformToPetals = true;
+      poemDiv.style.opacity = 0;
+      return;
+    }
+  }
+
+  // 新增一层旋转文字
+  function addLayer() {
+    if (layers.length >= maxLayers) layers.shift();
+    layers.push({
+      radius: baseRadius,
+      angleOffset: random(TWO_PI),
+      size: random(8, 14),
+      alpha: 255
+    });
+  }
+
+  // ✨ 显示诗 + 模糊背景
+  function showPoemWithBlur(textContent) {
+    blurActive = true;
+    overlayDiv.style.background = "rgba(255, 250, 252, 0.75)";
+    overlayDiv.style.backdropFilter = "blur(6px)";
+    poemDiv.style.opacity = 0;
+    setTimeout(() => {
+      poemDiv.innerText = textContent;
+      poemDiv.style.opacity = 1;
+    }, 400);
+  }
+
+  // 🌫️ 取消模糊
+  function hideBlur() {
+    blurActive = false;
+    poemDiv.style.opacity = 0;
+    overlayDiv.style.background = "rgba(255, 250, 252, 0)";
+    overlayDiv.style.backdropFilter = "blur(0px)";
+  }
+
+  // 💮 字母转花瓣
+  function lettersToPetalsSnapshot() {
+    petals = [];
+    for (const layer of layers) {
+      const { radius: startR, angleOffset: offset, size: baseSize, alpha } = layer;
+      let r = startR;
+      const angleStep = PI / 12;
+      const radiusStep = 10;
+      const letterCount = 400;
+
+      for (let i = 0; i < letterCount; i++) {
+        const angle = i * angleStep + offset;
+        const x = r * cos(angle);
+        const y = r * sin(angle);
+        const ts = baseSize + 0.12 * r;
+        const dir = p5.Vector.fromAngle(angle);
+        const radial = p5.Vector.fromAngle(angle - PI/2);
+        const v = p5.Vector.add(dir.mult(0.3), radial.mult(0.1));
+        v.rotate(random(-0.2, 0.2));
+        petals.push(new PetalParticle(createVector(x, y), v, ts, alpha));
+        r += radiusStep / (1 + 0.01 * i);
+      }
+    }
+  }
+
+  // 🌺 花瓣粒子类
+  class PetalParticle {
+    constructor(pos, vel, ts, alpha) {
+      this.pos = pos.copy();
+      this.vel = vel.copy();
+      this.rot = random(TWO_PI);
+      this.rotSpeed = random(-0.02, 0.02);
+      this.scale = map(ts, 10, 80, 14, 30);
+      this.alpha = alpha;
+      this.wobbleT = random(1000);
+      this.rColor = color(190 + random(-10, 10), 30, 50); // 深红中心
+      this.edgeColor = color(255, 150 + random(-20, 20), 170 + random(-10, 10)); // 粉边
+    }
+
+    update() {
+      this.vel.add(createVector(0, -0.002));
+      const wobble = sin((frameCount + this.wobbleT) * 0.02) * 0.15;
+      this.vel.x += wobble * 0.02;
+      this.pos.add(this.vel);
+      this.rot += this.rotSpeed;
+    }
+
+    display() {
+      push();
+      translate(this.pos.x, this.pos.y);
+      rotate(this.rot);
+      noStroke();
+
+      // 层叠渐变（更像玫瑰花瓣）
+      for (let i = 6; i >= 1; i--) {
+        const inter = lerpColor(this.rColor, this.edgeColor, i/6.0);
+        fill(red(inter), green(inter), blue(inter), this.alpha * 0.9);
+        this.drawPetalShape(this.scale * (i / 6.0));
+      }
+
+      // 轻微纹理线条
+      stroke(255, 150, 150, 60);
+      strokeWeight(0.6);
+      for (let j = 0; j < 3; j++) {
+        const startY = -this.scale * random(0.2, 1.0);
+        const endY = -this.scale * random(1.1, 1.4);
+        const bend = random(-this.scale * 0.3, this.scale * 0.3);
+        noFill();
+        beginShape();
+        vertex(0, startY);
+        bezierVertex(bend, (startY + endY)/2, bend/2, endY, 0, endY);
+        endShape();
+      }
+
+      pop();
+    }
+
+    drawPetalShape(s) {
+      beginShape();
+      vertex(0, 0);
+      bezierVertex(-s*0.5, -s*0.3, -s*0.25, -s*1.25, 0, -s*1.4);
+      bezierVertex(s*0.25, -s*1.25, s*0.5, -s*0.3, 0, 0);
+      endShape(CLOSE);
+    }
+
+    isAlive() {
+      return (
+        this.pos.x > -width/2 - 100 &&
+        this.pos.x < width/2 + 100 &&
+        this.pos.y > -height/2 - 100 &&
+        this.pos.y < height/2 + 100
+      );
+    }
+  }
+
+  function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
+  }
+  </script>
+</body>
+</html>
