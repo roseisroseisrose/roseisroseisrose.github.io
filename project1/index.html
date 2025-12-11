@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A rose is a rose — code spiral + sound</title>
+<!-- p5.js for visual -->
+<script src="https://cdn.jsdelivr.net/npm/p5@1.9.3/lib/p5.min.js"></script>
+<!-- Tone.js for audio -->
+<script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.min.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#111;color:#eee;font-family:system-ui,Helvetica,Arial;}
+  #ui{position:fixed;inset:auto 1rem 1rem 1rem;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  button, input[type=range]{accent-color:#e24;}
+  .pill{background:#fff1;padding:.6rem .9rem;border-radius:999px;border:1px solid #333;color:#111}
+  .note{opacity:.7}
+</style>
+</head>
+<body>
+<div id="ui">
+  <button id="start" class="pill">▶ Start</button>
+  <label class="pill">Speed
+    <input id="speed" type="range" min="-2" max="2" step="0.01" value="0.4">
+  </label>
+  <label class="pill">Zoom
+    <input id="zoom" type="range" min="0.6" max="1.4" step="0.01" value="1.0">
+  </label>
+  <span class="note">Visual: spiral text rotates；Audio: TTS + synth loop pans around (headphones 🔊)</span>
+</div>
+
+<script>
+/* -------------------- VISUAL (p5.js) -------------------- */
+let angle = 0;
+let speedSlider, zoomSlider;
+
+const phrase = "A ROSE IS A ROSE IS A ROSE • ";
+
+function setup(){
+  const c = createCanvas(window.innerWidth, window.innerHeight);
+  c.canvas.style.display = "block";
+  textAlign(CENTER, CENTER);
+  speedSlider = document.getElementById('speed');
+  zoomSlider  = document.getElementById('zoom');
+}
+
+function windowResized(){ resizeCanvas(window.innerWidth, window.innerHeight); }
+
+function draw(){
+  background(17);
+  translate(width/2, height/2);
+  const zoom = parseFloat(zoomSlider.value);
+  scale(zoom);
+
+  // base palette
+  noFill();
+  stroke(60);
+  circle(0,0,6); // tiny core
+
+  // spiral rings (像花蕊一层层外推)
+  const rings = 12;
+  for(let i=0;i<rings;i++){
+    const r = 40 + i*28;              // 半径递增
+    const chars = phrase;              // 文本串
+    const steps = 64 + i*4;            // 每圈放置的字符数
+    const size  = 10 + i*2.2;          // 字号由内到外变大
+    const localRot = angle * (1 + i*0.04); // 外圈稍快，内圈稍慢 → 花开感
+    push();
+    rotate(localRot);
+    for(let k=0;k<steps;k++){
+      const a = k/steps * TWO_PI;
+      const x = r * Math.cos(a);
+      const y = r * Math.sin(a);
+      push();
+      translate(x,y);
+      rotate(a + HALF_PI);           // 让字沿切线方向
+      noStroke();
+      fill(235);
+      textSize(size);
+      text(chars[k % chars.length], 0, 0);
+      pop();
+    }
+    pop();
+  }
+
+  // rotate
+  angle += parseFloat(speedSlider.value) * 0.01;
+}
+
+/* -------------------- AUDIO (Tone.js + Web Speech) -------------------- */
+let started = false;
+const startBtn = document.getElementById('start');
+
+async function startAudio(){
+  if(started) return;
+  started = true;
+
+  await Tone.start();           // 解锁音频
+  // 1) 合成器做一个极简“呼吸”垫底
+  const synth = new Tone.PolySynth(Tone.Synth, {
+    oscillator:{type:"sine"}, envelope:{attack:0.8, decay:0.2, sustain:0.3, release:1.6}
+  }).toDestination();
+
+  // 2) 旋转声像器（环绕感 —— 语言在你耳边“绕圈”）
+  const panner = new Tone.Panner(0).toDestination();
+  const ping   = new Tone.MembraneSynth({octaves:3, pitchDecay:0.01}).connect(panner);
+
+  // 把合成器也接到旋转声像器，整体慢慢环绕
+  synth.connect(panner);
+
+  // Loop：对应 “A rose | is a rose | is a rose”
+  const root = "C4";
+  const seq = new Tone.Sequence((time, step)=>{
+    // 小鼓点提示句读
+    if(step === 0 || step === 4 || step === 8) ping.triggerAttackRelease("C2", "8n", time);
+
+    // 和声级进：每轮重复略变 → “重复中生成差异”
+    const chord = [
+      Tone.Frequency(root).transpose(0 + step%3),
+      Tone.Frequency(root).transpose(7),
+      Tone.Frequency(root).transpose(12)
+    ];
+    synth.triggerAttackRelease(chord, "8n", time);
+
+    // 声像环绕（-1..1）
+    const t = Tone.Transport.seconds;
+    const pan = Math.sin(t * 0.6);   // 慢慢绕头部
+    panner.pan.rampTo(pan, 0.1);
+
+  }, [...Array(12).keys()], "8n");
+
+  seq.start(0);
+  Tone.Transport.bpm.value = 96;
+  Tone.Transport.start();
+
+  // 3) Web Speech：机器朗读短句，作为“语言素材”
+  const utt = new SpeechSynthesisUtterance("a rose is a rose is a rose");
+  utt.rate = 0.9;  // 速率
+  utt.pitch = 1.0;
+  utt.lang = "en-US";
+
+  // 周期性朗读（与 Transport 对齐）
+  setInterval(() => { window.speechSynthesis.speak(utt); }, 4000);
+}
+
+startBtn.addEventListener('click', startAudio);
+</script>
+</body>
+</html>
